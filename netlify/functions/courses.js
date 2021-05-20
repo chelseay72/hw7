@@ -58,7 +58,7 @@ exports.handler = async function(event) {
   // create an object with the course data to hold the return value from our lambda
   let returnValue = {
     courseNumber: courseData.courseNumber,
-    name: courseData.name
+    name: courseData.courseName
   }
 
   // set a new Array as part of the return value
@@ -67,8 +67,13 @@ exports.handler = async function(event) {
   // ask Firebase for the sections corresponding to the Document ID of the course, wait for the response
   let sectionsQuery = await db.collection('sections').where(`courseId`, `==`, courseId).get()
 
+  
   // get the documents from the query
   let sections = sectionsQuery.docs
+
+let averageCourseRating = 0
+
+let courseReviewLength = 0
 
   // loop through the documents
   for (let i=0; i < sections.length; i++) {
@@ -79,7 +84,9 @@ exports.handler = async function(event) {
     let sectionData = sections[i].data()
     
     // create an Object to be added to the return value of our lambda
-    let sectionObject = {}
+    let sectionObject = {
+      reviews: []
+    }
 
     // ask Firebase for the lecturer with the ID provided by the section; hint: read "Retrieve One Document (when you know the Document ID)" in the reference
     let lecturerQuery = await db.collection('lecturers').doc(sectionData.lecturerId).get()
@@ -94,8 +101,63 @@ exports.handler = async function(event) {
     returnValue.sections.push(sectionObject)
 
     // 🔥 your code for the reviews/ratings goes here
-  }
 
+    //pull the data from reviews that correlate to the sectionId from each for loop
+    
+    let reviewsQuery = await db.collection(`reviews`).where(`sectionId`,`==`, sectionId ).get() 
+
+    let reviews = reviewsQuery.docs
+    
+    //call variables outside for loop to calculate section average rating, # of reviews, and total rating sum 
+
+    let sectionAverageRating = 0
+
+    let sectionReviewLength = 0
+
+    let reviewsSum = 0
+
+    //create for loop to loop through reviews, pull out comments and rating, then calculate average rating for each section 
+      for(let j=0; j < reviews.length; j++) {
+        let reviewsId = reviews[j].id
+
+        let reviewsData = reviews[j].data()
+
+        let review = {
+          comment: reviewsData.comment,
+          rating: reviewsData.rating
+        }
+
+        sectionObject.reviews.push(review)
+
+        
+        reviewsSum = reviewsSum + reviewsData.rating
+
+       sectionAverageRating = reviewsSum/reviews.length
+
+
+        sectionReviewLength = reviews.length
+        
+      }
+     
+      //push average rating and # of reviews one time after the loop 
+
+      sectionObject.sectionAverageRating = sectionAverageRating
+
+      sectionObject.sectionReviewLength = sectionReviewLength
+
+      //calculate average course rating and number of reviews. note that average course rating is the average of the SECTIONS average, not an individual average of all the ratings themselves
+      averageCourseRating = averageCourseRating + sectionAverageRating
+
+      //push 
+      returnValue.averageCourseRating = averageCourseRating/sections.length
+      
+      courseReviewLength = courseReviewLength + reviews.length
+      
+      //push
+      returnValue.courseReviewLength = courseReviewLength
+  
+  }
+ 
   // return the standard response
   return {
     statusCode: 200,
